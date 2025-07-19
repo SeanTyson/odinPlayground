@@ -11,11 +11,12 @@ Settler :: struct {
 }
 
 draw_triangle_fan_manual :: proc(center: rl.Vector2, ring: [dynamic]rl.Vector2, color: rl.Color) {
-    fmt.println("center:", center);
-    fmt.println("center:", ring[0]);
-    fmt.println("center:", ring[1]);
-
-    rl.DrawTriangle(center, ring[0], ring[1], color)
+    count := len(ring)
+    for i in 0..<count-1 {
+        rl.DrawTriangle(center, ring[i+1], ring[i], color)
+    }
+    // Close the loop
+    rl.DrawTriangle(center, ring[0], ring[count-1], color)
 }
 
 
@@ -32,6 +33,7 @@ main :: proc() {
     territory_dirty := false
     for !rl.WindowShouldClose() {
         rl.BeginDrawing()
+        rl.ClearBackground(rl.RAYWHITE)
         rl.DrawCircleV(settler.position, settler.radius, rl.RED)
         mouse_pos := rl.GetMousePosition()
 
@@ -50,6 +52,7 @@ main :: proc() {
                 }
                 num_segments = 100
                 fan_points = nil
+
                 for i in 0..<num_segments {
                     angle := 2.0 * math.PI * f32(i) / f32(num_segments)
                     x := settler.position.x + math.cos(angle) * radius
@@ -60,11 +63,10 @@ main :: proc() {
                 append(&spline_points, spline_points[0])
                 append(&spline_points, spline_points[1])
                 append(&spline_points, spline_points[2])
+                fan_points[0] = settler.position
                 rl.DrawSplineCatmullRom(raw_data(spline_points), i32(len(spline_points)), 4, rl.RED)
                 draw_triangle_fan_manual(settler.position, fan_points, rl.GREEN)
-                rl.ClearBackground(rl.RAYWHITE)
-                rl.DrawCircleV(rl.Vector2{400, 300}, 10, rl.RED)
-
+                fmt.println("fan_points:", fan_points);
 
            }
             else {
@@ -78,7 +80,7 @@ main :: proc() {
             shape_closed = true
         }
 
-        rl.ClearBackground(rl.RAYWHITE)
+
 
         // Draw lines connecting points (open shape)
         if len(points) >= 2 {
