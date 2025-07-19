@@ -2,189 +2,117 @@ package main
 
 import rl "vendor:raylib"
 import "core:math"
-import "core:strconv"
+import "core:fmt"
 
-Unit_Stats :: struct {
-	health: int,
-	speed: int,
-	position: [2]f32,
-	range: int,
-	movement_range: int,
-	attack_range: int,
+
+Settler :: struct {
+    position: rl.Vector2,
+    radius: f32
 }
 
-Unit_Modes :: enum {
-	Moving,
-	Engaging,
+draw_triangle_fan_manual :: proc(center: rl.Vector2, ring: [dynamic]rl.Vector2, color: rl.Color) {
+    fmt.println("center:", center);
+    fmt.println("center:", ring[0]);
+    fmt.println("center:", ring[1]);
+
+    rl.DrawTriangle(center, ring[0], ring[1], color)
 }
 
-Warrior_Unit :: struct {
-	stats: Unit_Stats,
-	name: string,
-}
-
-// === GLOBAL STATE ===
-selected_unit: ^Warrior_Unit = nil
-control_points: [dynamic]rl.Vector2
-dragging_point_index: int = -1
-territory_radius: f32 = 100.0
-territory_segments: int = 600
-territory_confirmed: bool = false
-max_territory_area: f32 = 40000.0
-
-// === Generate Circle of Points Around Unit ===
-generate_territory_points :: proc(center: rl.Vector2, radius: f32, segments: int) -> [dynamic]rl.Vector2 {
-	points: [dynamic]rl.Vector2
-	for i in 0..<segments {
-		angle := (2.0 * math.PI * f32(i)) / f32(segments)
-		point := rl.Vector2{
-			center.x + math.cos(angle) * radius,
-			center.y + math.sin(angle) * radius,
-		}
-		append(&points, point)
-	}
-	return points
-}
-
-// === Catmull-Rom Interpolation ===
-catmull_rom :: proc(p0, p1, p2, p3: rl.Vector2, t: f32) -> rl.Vector2 {
-	t2 := t * t
-	t3 := t2 * t
-
-	return rl.Vector2{
-		0.5 * ((2.0 * p1.x) +
-			(-p0.x + p2.x) * t +
-			(2.0*p0.x - 5.0*p1.x + 4.0*p2.x - p3.x) * t2 +
-			(-p0.x + 3.0*p1.x - 3.0*p2.x + p3.x) * t3),
-		0.5 * ((2.0 * p1.y) +
-			(-p0.y + p2.y) * t +
-			(2.0*p0.y - 5.0*p1.y + 4.0*p2.y - p3.y) * t2 +
-			(-p0.y + 3.0*p1.y - 3.0*p2.y + p3.y) * t3),
-	}
-}
-
-// === Shoelace Polygon Area Calculation ===
-calculate_area :: proc(points: [dynamic]rl.Vector2) -> f32 {
-	area: f32 = 0
-	n := len(points)
-	for i in 0..<n {
-		j := (i + 1) % n
-		area += (points[i].x * points[j].y) - (points[j].x * points[i].y)
-	}
-	return math.abs(area) * 0.5
-}
-
-// === Draw Smooth Spline ===
-draw_spline_loop :: proc(points: [dynamic]rl.Vector2) {
-	count := len(points)
-	steps := 20
-
-	for i in 0..<count {
-		p0 := points[(i - 1 + count) % count]
-		p1 := points[i]
-		p2 := points[(i + 1) % count]
-		p3 := points[(i + 2) % count]
-
-		for j in 0..<steps {
-			t1 := f32(j) / f32(steps)
-			t2 := f32(j+1) / f32(steps)
-
-			pt1 := catmull_rom(p0, p1, p2, p3, t1)
-			pt2 := catmull_rom(p0, p1, p2, p3, t2)
-
-			rl.DrawLineV(pt1, pt2, rl.RED)
-		}
-	}
-}
 
 main :: proc() {
-	rl.InitWindow(800, 800, "civlike raylib experiments")
-	rl.SetTargetFPS(120)
+    rl.InitWindow(800, 600, "civlike")
+    rl.SetTargetFPS(60)
+    settler: Settler
+    settler.position = {400.0,300.0}
+    settler.radius = 5.0
+    points: [dynamic]rl.Vector2
+    spline_points: [dynamic]rl.Vector2
+    fan_points: [dynamic]rl.Vector2
+    shape_closed: bool = false
+    territory_dirty := false
+    for !rl.WindowShouldClose() {
+        rl.BeginDrawing()
+        rl.DrawCircleV(settler.position, settler.radius, rl.RED)
+        mouse_pos := rl.GetMousePosition()
 
-	unit := Warrior_Unit{
-		stats = Unit_Stats{
-			position = [2]f32{400.0, 400.0},
-			health = 100,
-			speed = 10,
-			range = 1,
-			movement_range = 3,
-			attack_range = 1,
-		},
-		name = "Warrior",
-	}
+        // Left click adds points if shape not closed
+        if territory_dirty || !shape_closed && rl.IsMouseButtonDown(.LEFT) {
+            if  rl.CheckCollisionPointCircle(mouse_pos, settler.position, settler.radius) {
+                territory_dirty = true
+                num_segments := 8
+                radius: f32 = 100.0
+                spline_points = nil // clear before rebuilding
+                for i in 0..<num_segments {
+                    angle := 2.0 * rl.PI * f32(i) / f32(num_segments)
+                    x := settler.position.x + math.cos(angle) * radius
+                    y := settler.position.y + math.sin(angle) * radius
+                    append(&spline_points, rl.Vector2{x, y})
+                }
+                num_segments = 100
+                fan_points = nil
+                for i in 0..<num_segments {
+                    angle := 2.0 * math.PI * f32(i) / f32(num_segments)
+                    x := settler.position.x + math.cos(angle) * radius
+                    y := settler.position.y + math.sin(angle) * radius
+                    append(&fan_points, rl.Vector2{x, y})
+                }
+                // Add first 3 points again to loop the spline
+                append(&spline_points, spline_points[0])
+                append(&spline_points, spline_points[1])
+                append(&spline_points, spline_points[2])
+                rl.DrawSplineCatmullRom(raw_data(spline_points), i32(len(spline_points)), 4, rl.RED)
+                draw_triangle_fan_manual(settler.position, fan_points, rl.GREEN)
+                rl.ClearBackground(rl.RAYWHITE)
+                rl.DrawCircleV(rl.Vector2{400, 300}, 10, rl.RED)
 
-	for !rl.WindowShouldClose() {
-		mouse := rl.GetMousePosition()
 
-		// === Select unit on click ===
-		if rl.IsMouseButtonPressed(.LEFT) {
-			unit_pos := rl.Vector2{ unit.stats.position[0], unit.stats.position[1] }
-			if rl.CheckCollisionPointCircle(mouse, unit_pos, 15.0) {
-				selected_unit = &unit
-				control_points = generate_territory_points(unit_pos, territory_radius, territory_segments)
-				territory_confirmed = false
-			}
-		}
+           }
+            else {
+                append(&points, mouse_pos)
+                rl.DrawCircleV(mouse_pos, 2, rl.DARKGRAY)
+            }
+        }
 
-		// === Drag control points ===
-		if rl.IsMouseButtonDown(.LEFT) && len(control_points) > 0 && !territory_confirmed {
-			if dragging_point_index == -1 {
-				for i in 0..<len(control_points) {
-					if rl.Vector2Distance(mouse, control_points[i]) < 10.0 {
-						dragging_point_index = i
-						break
-					}
-				}
-			} else {
-				control_points[dragging_point_index] = mouse
-			}
-		} else {
-			dragging_point_index = -1
-		}
+        // Right click closes the shape
+        if !shape_closed && rl.IsMouseButtonPressed(.RIGHT) && len(points) >= 3 {
+            shape_closed = true
+        }
 
-		// === Confirm territory on right click ===
-		if rl.IsMouseButtonPressed(.RIGHT) && len(control_points) > 0 && !territory_confirmed {
-			area := calculate_area(control_points)
-			if area <= max_territory_area {
-				territory_confirmed = true
-			}
-		}
+        rl.ClearBackground(rl.RAYWHITE)
 
-		// === DRAW ===
-		rl.BeginDrawing()
-		rl.ClearBackground(rl.BLUE)
+        // Draw lines connecting points (open shape)
+        if len(points) >= 2 {
+            for i in 0..<(len(points)-2) {
+                rl.DrawLineV(points[i], points[i+1], rl.BLACK)
+            }
+            if shape_closed {
+                // Close the shape by connecting last to first
+                rl.DrawLineV(points[len(points)-1], points[0], rl.BLACK)
+            }
+        }
 
-		unit_pos := rl.Vector2{ unit.stats.position[0], unit.stats.position[1] }
-		rl.DrawCircleV(unit_pos, 15.0, rl.YELLOW)
-		rl.DrawText("Click unit to create territory", 10, 10, 20, rl.WHITE)
+        // Fill shape if closed
+        if shape_closed {
+            // Draw filled polygon using Triangle Fan
+            // Note: works best if shape is convex or mildly concave
+            rl.DrawTriangleFan(raw_data(points), i32(len(points)), rl.Fade(rl.GREEN, 0.5))
+        }
 
-		if len(control_points) > 0 {
-			area := calculate_area(control_points)
+        // UI Instructions
+        rl.DrawText("Left-click to add points", 10, 10, 20, rl.DARKGRAY)
+        rl.DrawText("Right-click to close and fill shape", 10, 40, 20, rl.DARKGRAY)
+        if shape_closed {
+            rl.DrawText("Shape closed! Press R to reset.", 10, 70, 20, rl.RED)
+        }
 
-			// Fill if confirmed
-			if territory_confirmed {
-                rl.DrawTriangleFan(&control_points[0], i32(len(control_points)), rl.Color{0, 200, 0, 100})
-			}
+        // Reset on 'R'
+        if rl.IsKeyPressed(.R) {
+            points = nil
+            shape_closed = false
+        }
 
-			// Draw spline and points
-			draw_spline_loop(control_points)
-			for pt in control_points {
-				rl.DrawCircleV(pt, 5.0, rl.DARKGREEN)
-			}
+        rl.EndDrawing()
+    }
 
-            buffer: [20]u8
-            area_str := strconv.itoa(buffer[:], int(area))
-			// Area display
-			rl.DrawText("Area: ", 10, 40, 20, rl.WHITE)
-			if area > max_territory_area {
-				rl.DrawText("Area too large!", 10, 70, 20, rl.RED)
-			} else if !territory_confirmed {
-				rl.DrawText("Right-click to confirm territory", 10, 70, 20, rl.LIME)
-			}
-		}
-
-		rl.EndDrawing()
-	}
-
-	rl.CloseWindow()
+    rl.CloseWindow()
 }
