@@ -34,7 +34,7 @@ draw_triangle_fan_manual :: proc(center: rl.Vector2, ring: [dynamic]rl.Vector2, 
 
 
 main :: proc() {
-    rl.InitWindow(800, 600, "civlike")
+    rl.InitWindow(800, 600, "OdinPainter")
     rl.SetTargetFPS(60)
     settler: Settler
     settler.position = {400.0,300.0}
@@ -47,24 +47,25 @@ main :: proc() {
     shape_closed: bool = false
     territory_dirty := false
     for !rl.WindowShouldClose() {
+        colourCheck := false
         rl.BeginDrawing()
         rl.ClearBackground(rl.RAYWHITE)
-        rl.DrawRectangle(700,500,10,10,rl.RED)
         mouse_pos := rl.GetMousePosition()
         for i in 0..<len(colour_picker.Colours) {
-            rl.DrawRectangle(i32(700+i*10),i32(500+i*10),10,10,colour_picker.Colours[i])
-        }
-        if(rl.IsMouseButtonPressed(.LEFT)){
-            for i in 0..<len(colour_picker.Colours) {
-                if rl.CheckCollisionPointRec(mouse_pos, rl.Rectangle{f32(700+i*10),f32(500+i*10),10,10}) {
-                    colour = colour_picker.Colours[i]
-                }   
-            }
+            rl.DrawRectangle(i32(700+i*10),i32(50),10,10,colour_picker.Colours[i])
         }
         // Left click adds points if shape not closed
         if rl.IsMouseButtonDown(.LEFT) {
-            rl.DrawCircleV(mouse_pos, 5, colour)
-            append(&points, ColourPoint{Position = mouse_pos, Colour = colour})
+            for i in 0..<len(colour_picker.Colours) {
+            if rl.CheckCollisionPointRec(mouse_pos, rl.Rectangle{f32(700+i*10),f32(50),10,10}) {
+                colour = colour_picker.Colours[i]
+                colourCheck = true
+            }   
+        }
+            if (!colourCheck){
+                rl.DrawCircleV(mouse_pos, 5, colour)
+                append(&points, ColourPoint{Position = mouse_pos, Colour = colour})
+            }
         }
 
         if(len(points) != 0) {
