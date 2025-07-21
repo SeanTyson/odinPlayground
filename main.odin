@@ -45,7 +45,7 @@ main :: proc() {
                 radius: f32 = 100.0
                 spline_points = nil // clear before rebuilding
                 for i in 0..<num_segments {
-                    angle := 2.0 * rl.PI * f32(i) / f32(num_segments)
+                    angle := 2.0 * rl.PI * f32(i) / f32(num_segments) 
                     x := settler.position.x + math.cos(angle) * radius
                     y := settler.position.y + math.sin(angle) * radius
                     append(&spline_points, rl.Vector2{x, y})
@@ -66,7 +66,6 @@ main :: proc() {
                 fan_points[0] = settler.position
                 rl.DrawSplineCatmullRom(raw_data(spline_points), i32(len(spline_points)), 4, rl.RED)
                 draw_triangle_fan_manual(settler.position, fan_points, rl.GREEN)
-                fmt.println("fan_points:", fan_points);
 
            }
             else {
