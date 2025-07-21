@@ -75,12 +75,7 @@ main :: proc() {
 
         
         // UI Instructions
-        rl.DrawText("Left-click to add points", 10, 10, 20, rl.DARKGRAY)
-        rl.DrawText("Right-click to close and fill shape", 10, 40, 20, rl.DARKGRAY)
-        if shape_closed {
-            rl.DrawText("Shape closed! Press R to reset.", 10, 70, 20, rl.RED)
-        }
-
+        rl.DrawText("SeanDraw!", 10, 10, 20, rl.DARKGRAY)
         // Reset on 'R'
         if rl.IsKeyPressed(.R) {
             points = nil
